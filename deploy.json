@@ -1,0 +1,141 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template provisioning an S3 bucket, IAM role, Snowflake IAM role, and Glue Job.",
+  "Resources": {
+    "DbtClueS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "${AWS::AccountId}-dbt-clue-bucket" },
+        "VersioningConfiguration": { "Status": "Enabled" },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ExpireOldObjects",
+              "Status": "Enabled",
+              "Prefix": "",
+              "ExpirationInDays": 365
+            }
+          ]
+        }
+      }
+    },
+    "DbtClueGlueRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "glue.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole",
+          "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+        ]
+      }
+    },
+    "DbtClueGlueJob": {
+      "Type": "AWS::Glue::Job",
+      "Properties": {
+        "Name": "dbt-clue-gluejob",
+        "Role": { "Ref": "DbtClueGlueRole" },
+        "Command": {
+          "Name": "pythonshell",
+          "PythonVersion": "3.9",
+          "ScriptLocation": {
+            "Fn::Sub": "s3://${AWS::AccountId}-dbt-clue-bucket/script/script.py"
+          }
+        },
+        "ExecutionProperty": {
+          "MaxConcurrentRuns": 1
+        },
+        "MaxRetries": 0,
+        "Timeout": 10,
+        "GlueVersion": "3.0"
+      }
+    },
+    "SnowflakeS3IamRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "deglueproject3stack-SnowflakeS3IamRolejD7BK58C3InQ",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "arn:aws:iam::990117462990:user/zg0d1000-s"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": "KNC36883_SFCRole=4_VG7TSq76Xg7dzvgxQRQmtPDYC5I="
+                }
+              }
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "SnowflakeS3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-dbt-clue-bucket/data/*" }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-dbt-clue-bucket" },
+                  "Condition": {
+                    "StringLike": {
+                      "s3:prefix": ["data/*"]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SnowflakeRoleArn": {
+      "Description": "ARN of the Snowflake S3 IAM Role",
+      "Value": { "Fn::GetAtt": ["SnowflakeS3IamRole", "Arn"] }
+    },
+    "S3BucketName": {
+      "Description": "Name of created S3 bucket",
+      "Value": { "Fn::Sub": "${AWS::AccountId}-dbt-clue-bucket" }
+    },
+    "GlueJobName": {
+      "Description": "Glue Job Name",
+      "Value": "dbt-clue-gluejob"
+    }
+  }
+}
